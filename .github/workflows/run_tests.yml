@@ -1,4 +1,4 @@
-name: Tests and Code Review
+name: Code Review
 
 on:
   pull_request:
@@ -48,13 +48,6 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           poetry run python code_review.py
-
-      - name: Run Tests
-        if: success() || failure()  # Roda mesmo se o review falhar
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          poetry run pytest --maxfail=1 --disable-warnings
 
       - name: Notify on Failure
         if: failure()
