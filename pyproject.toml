@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "code-reviewer"
+version = "0.1.0"
+description = "Code review automation with Anthropics and GitHub integration"
+authors = ["Seu Nome <seuemail@example.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+anthropic = "^0.39.0"
+pygithub = ">=2.5.0,<3.0.0"
+gitpython = "^3.1.43"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
