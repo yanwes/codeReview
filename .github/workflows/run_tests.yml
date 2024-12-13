@@ -51,24 +51,32 @@ jobs:
           import os
           import requests
           from github import Github
+          from requests.packages.urllib3.exceptions import InsecureRequestWarning
           from git import Repo
+          
+          # Desativar avisos de verificação SSL insegura
+          requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
           
           # Configuração do Flow API
           flow_client_id = os.environ['FLOW_CLIENT_ID']
           flow_client_secret = os.environ['FLOW_CLIENT_SECRET']
           
           # Autenticação no Flow
-          auth_url = "https://api.flowai.com/oauth/token"  # Verifique a URL correta
+          auth_url = "https://api.flowai.com/oauth/token"  # Verifique se esta URL está correta
           auth_data = {
               "grant_type": "client_credentials",
               "client_id": flow_client_id,
               "client_secret": flow_client_secret
           }
-          auth_response = requests.post(auth_url, data=auth_data)
-          if auth_response.status_code == 200:
+          
+          try:
+              auth_response = requests.post(auth_url, data=auth_data, verify=False)
+              auth_response.raise_for_status()
               access_token = auth_response.json()['access_token']
-          else:
-              raise Exception(f"Falha na autenticação com o Flow: {auth_response.text}")
+          except requests.exceptions.RequestException as e:
+              print(f"Erro na autenticação: {e}")
+              print(f"Resposta do servidor: {auth_response.text if 'auth_response' in locals() else 'Nenhuma resposta'}")
+              raise
           
           flow_headers = {
               "Authorization": f"Bearer {access_token}",
@@ -94,20 +102,19 @@ jobs:
               prompt += f"Alterações:\n{file.patch}\n\n"
           
           # Chamar Flow API
-          flow_url = "https://api.flowai.com/v1/chat"  # Verifique a URL correta
+          flow_url = "https://api.flowai.com/v1/chat"  # Verifique se esta URL está correta
           flow_payload = {
               "model": "claude-2",  # Ajuste conforme necessário
               "messages": [{"role": "user", "content": prompt}]
           }
           
-          response = requests.post(flow_url, json=flow_payload, headers=flow_headers)
-          
-          if response.status_code == 200:
+          try:
+              response = requests.post(flow_url, json=flow_payload, headers=flow_headers, verify=False)
+              response.raise_for_status()
               review_result = response.json()['choices'][0]['message']['content']
-              # Postar o resultado como um comentário no PR
               pr.create_issue_comment(f"Análise do Flow:\n\n{review_result}")
-          else:
-              error_message = f"Erro na API do Flow: {response.status_code}\n{response.text}"
+          except requests.exceptions.RequestException as e:
+              error_message = f"Erro na API do Flow: {e}\n{response.text if 'response' in locals() else 'Nenhuma resposta'}"
               print(error_message)
               pr.create_issue_comment(f"Erro ao executar a revisão de código:\n\n{error_message}")
           EOF
