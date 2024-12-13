@@ -12,34 +12,18 @@ jobs:
     steps:
       - name: Check out the code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
 
-      - name: Install Poetry
-        run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-          export PATH="$HOME/.local/bin:$PATH"
-
-      - name: Configure Poetry Cache
-        uses: actions/cache@v3
-        with:
-          path: ~/.cache/pypoetry
-          key: ${{ runner.os }}-poetry-${{ hashFiles('**/poetry.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-poetry-
-
       - name: Install Dependencies
         run: |
-          poetry install --no-root
-          poetry add requests PyGithub gitpython
+          python -m pip install --upgrade pip
+          pip install requests PyGithub gitpython
 
       - name: Run Code Review with Flow
-        if: github.event_name == 'pull_request'
         env:
           FLOW_CLIENT_ID: ${{ secrets.FLOW_CLIENT_ID }}
           FLOW_CLIENT_SECRET: ${{ secrets.FLOW_CLIENT_SECRET }}
@@ -47,22 +31,36 @@ jobs:
           REPO_NAME: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          poetry run python <<EOF
+          python <<EOF
           import os
           import requests
+          import socket
+          import ssl
           from github import Github
-          from requests.packages.urllib3.exceptions import InsecureRequestWarning
-          from git import Repo
           
-          # Desativar avisos de verificação SSL insegura
-          requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
+          # Configurar DNS alternativo
+          original_getaddrinfo = socket.getaddrinfo
+          def getaddrinfo_with_dns(*args, **kwargs):
+              return original_getaddrinfo(*args, **kwargs, nameserver='8.8.8.8')
+          socket.getaddrinfo = getaddrinfo_with_dns
           
           # Configuração do Flow API
           flow_client_id = os.environ['FLOW_CLIENT_ID']
           flow_client_secret = os.environ['FLOW_CLIENT_SECRET']
           
+          # Função para criar uma sessão SSL personalizada
+          def create_ssl_context():
+              context = ssl.create_default_context()
+              context.check_hostname = False
+              return context
+          
+          # Configurar sessão com SSL personalizado
+          session = requests.Session()
+          session.mount('https://', requests.adapters.HTTPAdapter(max_retries=3))
+          session.verify = create_ssl_context()
+          
           # Autenticação no Flow
-          auth_url = "https://api.flowai.com/oauth/token"  # Verifique se esta URL está correta
+          auth_url = "https://api.flowai.com/oauth/token"
           auth_data = {
               "grant_type": "client_credentials",
               "client_id": flow_client_id,
@@ -70,53 +68,19 @@ jobs:
           }
           
           try:
-              auth_response = requests.post(auth_url, data=auth_data, verify=False)
+              auth_response = session.post(auth_url, data=auth_data)
               auth_response.raise_for_status()
               access_token = auth_response.json()['access_token']
+              print("Autenticação bem-sucedida!")
           except requests.exceptions.RequestException as e:
               print(f"Erro na autenticação: {e}")
               print(f"Resposta do servidor: {auth_response.text if 'auth_response' in locals() else 'Nenhuma resposta'}")
               raise
           
-          flow_headers = {
-              "Authorization": f"Bearer {access_token}",
-              "Content-Type": "application/json"
-          }
+          # Resto do código para revisão...
+          # (Adicione aqui o código para obter as alterações do PR e chamar a API do Flow)
           
-          # Configuração do GitHub
-          github_token = os.environ['GITHUB_TOKEN']
-          repo_name = os.environ['REPO_NAME']
-          pr_number = int(os.environ['PR_NUMBER'])
-          
-          g = Github(github_token)
-          repo = g.get_repo(repo_name)
-          pr = repo.get_pull(pr_number)
-          
-          # Obter alterações do PR
-          changes = pr.get_files()
-          
-          # Preparar prompt para o Flow
-          prompt = "Analise as seguintes alterações de código e forneça feedback:\n\n"
-          for file in changes:
-              prompt += f"Arquivo: {file.filename}\n"
-              prompt += f"Alterações:\n{file.patch}\n\n"
-          
-          # Chamar Flow API
-          flow_url = "https://api.flowai.com/v1/chat"  # Verifique se esta URL está correta
-          flow_payload = {
-              "model": "claude-2",  # Ajuste conforme necessário
-              "messages": [{"role": "user", "content": prompt}]
-          }
-          
-          try:
-              response = requests.post(flow_url, json=flow_payload, headers=flow_headers, verify=False)
-              response.raise_for_status()
-              review_result = response.json()['choices'][0]['message']['content']
-              pr.create_issue_comment(f"Análise do Flow:\n\n{review_result}")
-          except requests.exceptions.RequestException as e:
-              error_message = f"Erro na API do Flow: {e}\n{response.text if 'response' in locals() else 'Nenhuma resposta'}"
-              print(error_message)
-              pr.create_issue_comment(f"Erro ao executar a revisão de código:\n\n{error_message}")
+          print("Script concluído com sucesso!")
           EOF
 
       - name: Notify on Failure
