@@ -1,32 +1,15 @@
 [tool.poetry]
-name = "playwright-python-tests"
+name = "code-reviewer"
 version = "0.1.0"
-description = "Projeto de automação de testes com Playwright e Python"
-authors = ["Yan Wesley <yan.lima.ext@tooseguros.com.br>"]
+description = "Code review automation with Anthropics and GitHub integration"
+authors = ["Seu Nome <seuemail@example.com>"]
+license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-anthropic = "^0.39.0"
-pytest = "^7.0"
-playwright = "^1.48"
-pytest-playwright = "^0.3.0"
-pymongo = {extras = ["srv"], version = "^4.10.1"}
-pytest-bdd = "^7.3.0"
-Faker = "^30.6.0"
-pytest-xdist = "^3.6.1"
-torch = "^2.5.1"
-transformers = "^4.46.2"
-openai = "^1.54.3"
-
-[tool.poetry.dev-dependencies]
-pytest-html = "^3.1.1"
+anthropic = "^0.40.0"
 pygithub = ">=2.5.0,<3.0.0"
 gitpython = "^3.1.43"
-transformers = "^4.21"
-typing-extensions = "^4.12.2"
-
-[tool.poetry.group.dev.dependencies]
-allure-pytest = "^2.13.5"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
