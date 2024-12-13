@@ -37,12 +37,13 @@ jobs:
         run: |
           poetry install --no-root
           # Adicionar dependências específicas para o code review
-          poetry add anthropic PyGithub gitpython
+          poetry add PyGithub gitpython requests
 
       - name: Run Code Review
         if: github.event_name == 'pull_request'  # Só executa em PRs
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FLOW_CLIENT_ID: ${{ secrets.FLOW_CLIENT_ID }}
+          FLOW_CLIENT_SECRET: ${{ secrets.FLOW_CLIENT_SECRET }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO_NAME: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

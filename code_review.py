@@ -1,6 +1,6 @@
 import os
 import sys
-import anthropic
+import httpx
 from github import Github
 from git import Repo
 import json
@@ -27,14 +27,18 @@ class ReviewComment:
 
 class PRReviewer:
     def __init__(self):
-        self.anthropic_client = anthropic.Anthropic(
-            api_key=os.environ.get('ANTHROPIC_API_KEY')
-        )
+        self.flow_client_id = os.environ.get('FLOW_CLIENT_ID')
+        self.flow_client_secret = os.environ.get('FLOW_CLIENT_SECRET')
+        self.flow_api_url = "https://api.flowai.com/v1/chat/completions"
         self.github_client = Github(os.environ.get('GITHUB_TOKEN'))
         self.repo_name = os.environ.get('REPO_NAME')
         self.pr_number = int(os.environ.get('PR_NUMBER'))
-        self.max_chunk_size = 15000  # Reduced to avoid exceeding limits
-        self.diff_map = {}  # Map to store diff information
+        self.max_chunk_size = 15000
+        self.diff_map = {}
+        self.http_client = httpx.Client(verify=False)
+
+    def __del__(self):
+        self.http_client.close()
 
     def get_pr_diff(self) -> str:
         """Get the current PR diff"""
@@ -161,23 +165,46 @@ class PRReviewer:
         {files_content}
         """
 
-    def get_review_from_claude(self, diff_chunk: Dict[str, str], retry_count: int = 0) -> List[ReviewComment]:
+    def get_flow_access_token(self):
+        """Obter token de acesso do Flow AI"""
+        auth_url = "https://api.flowai.com/v1/oauth/token"
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": self.flow_client_id,
+            "client_secret": self.flow_client_secret
+        }
+        try:
+            response = self.http_client.post(auth_url, data=data)
+            response.raise_for_status()
+            return response.json()["access_token"]
+        except httpx.HTTPError as e:
+            logger.error(f"Failed to obtain Flow AI access token: {e}")
+            raise
+
+    def get_review_from_flow(self, diff_chunk: Dict[str, str], retry_count: int = 0) -> List[ReviewComment]:
         """Send chunk for review with retry and rate limiting"""
         try:
             if retry_count > 0:
                 time.sleep(retry_count * 5)
 
-            message = self.anthropic_client.messages.create(
-                model="claude-3-sonnet-20240229",
-                max_tokens=4000,
-                messages=[{
-                    "role": "user",
-                    "content": self.create_review_prompt(diff_chunk)
-                }]
-            )
+            access_token = self.get_flow_access_token()
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+            data = {
+                "model": "flow-gpt-4",
+                "messages": [
+                    {"role": "user", "content": self.create_review_prompt(diff_chunk)}
+                ]
+            }
+
+            response = self.http_client.post(self.flow_api_url, headers=headers, json=data)
+            response.raise_for_status()
+            response_json = response.json()
 
             try:
-                response_text = message.content[0].text.strip()
+                response_text = response_json["choices"][0]["message"]["content"].strip()
                 if not response_text.startswith('['):
                     match = re.search(r'\[(.*)\]', response_text, re.DOTALL)
                     if match:
@@ -209,19 +236,13 @@ class PRReviewer:
             except json.JSONDecodeError as e:
                 logger.error(f"Error parsing JSON response: {e}")
                 if retry_count < 2:
-                    return self.get_review_from_claude(diff_chunk, retry_count + 1)
+                    return self.get_review_from_flow(diff_chunk, retry_count + 1)
                 return []
 
-        except anthropic.RateLimitError:
-            logger.warning(f"Rate limit hit, attempt {retry_count + 1}")
-            if retry_count < 3:
-                time.sleep(60)
-                return self.get_review_from_claude(diff_chunk, retry_count + 1)
-            return []
-        except Exception as e:
+        except httpx.HTTPError as e:
             logger.error(f"Error getting review: {e}")
             if retry_count < 2:
-                return self.get_review_from_claude(diff_chunk, retry_count + 1)
+                return self.get_review_from_flow(diff_chunk, retry_count + 1)
             return []
 
     def validate_review_item(self, item: Dict) -> bool:
@@ -314,7 +335,7 @@ class PRReviewer:
         try:
             logger.info("Starting PR review")
 
-            required_vars = ['ANTHROPIC_API_KEY', 'GITHUB_TOKEN', 'REPO_NAME', 'PR_NUMBER']
+            required_vars = ['FLOW_CLIENT_ID', 'FLOW_CLIENT_SECRET', 'GITHUB_TOKEN', 'REPO_NAME', 'PR_NUMBER']
             missing_vars = [var for var in required_vars if not os.environ.get(var)]
 
             if missing_vars:
@@ -333,7 +354,7 @@ class PRReviewer:
             all_comments = []
             for i, chunk in enumerate(chunks, 1):
                 logger.info(f"Processing chunk {i} of {len(chunks)}")
-                comments = self.get_review_from_claude(chunk)
+                comments = self.get_review_from_flow(chunk)
                 if comments:
                     all_comments.extend(comments)
                 time.sleep(2)
