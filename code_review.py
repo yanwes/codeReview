@@ -17,7 +17,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
 @dataclass
 class ReviewComment:
     file_path: str
@@ -26,13 +25,11 @@ class ReviewComment:
     severity: str
     suggestion: str = None
 
-
 class PRReviewer:
     def __init__(self):
         self.flow_client_id = os.environ.get('FLOW_CLIENT_ID')
         self.flow_client_secret = os.environ.get('FLOW_CLIENT_SECRET')
-        # Ajuste esta URL conforme necessário
-        self.flow_api_url = "https://api.flowai.com/v1/chat/completions"
+        self.flow_api_url = "https://api.flowai.com/v1/chat/completions"  # Ajuste esta URL conforme necessário
         self.github_client = Github(os.environ.get('GITHUB_TOKEN'))
         self.repo_name = os.environ.get('REPO_NAME')
         self.pr_number = int(os.environ.get('PR_NUMBER'))
@@ -75,8 +72,7 @@ class PRReviewer:
                     line_map[current_file] = {}
                     current_line = 0
             elif line.startswith('@@'):
-                match = re.search(
-                    r'@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@', line)
+                match = re.search(r'@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@', line)
                 if match:
                     current_line = int(match.group(1)) - 1
             elif current_file:
@@ -193,19 +189,16 @@ class PRReviewer:
             data = {
                 "model": "flow-gpt-4",  # Ajuste o modelo conforme necessário
                 "messages": [
-                    {"role": "user",
-                        "content": self.create_review_prompt(diff_chunk)}
+                    {"role": "user", "content": self.create_review_prompt(diff_chunk)}
                 ]
             }
 
-            response = requests.post(
-                self.flow_api_url, headers=headers, json=data)
+            response = requests.post(self.flow_api_url, headers=headers, json=data)
             response.raise_for_status()
             response_json = response.json()
 
             try:
-                response_text = response_json["choices"][0]["message"]["content"].strip(
-                )
+                response_text = response_json["choices"][0]["message"]["content"].strip()
                 if not response_text.startswith('['):
                     match = re.search(r'\[(.*)\]', response_text, re.DOTALL)
                     if match:
@@ -249,8 +242,7 @@ class PRReviewer:
     def validate_review_item(self, item: Dict) -> bool:
         """Validate if review item has all required fields and line is in diff"""
         try:
-            required_fields = ['file_path',
-                               'line_number', 'message', 'severity']
+            required_fields = ['file_path', 'line_number', 'message', 'severity']
             if not all(field in item and item[field] is not None for field in required_fields):
                 return False
 
@@ -283,11 +275,16 @@ class PRReviewer:
             review_comments = []
             for comment in valid_comments:
                 review_comments.append({
-                'path': comment.file_path,
-                'position': comment.line_number,
-                'body': f"""
-                **{comment.severity} Severity Issue**
-                {comment.message} **Improvement Suggestion:** {comment.suggestion if comment.suggestion else 'N/A'}"""
+                    'path': comment.file_path,
+                    'position': comment.line_number,
+                    'body': f"""
+**{comment.severity} Severity Issue**
+
+{comment.message}
+
+**Improvement Suggestion:**
+{comment.suggestion if comment.suggestion else 'N/A'}
+"""
                 })
 
             if review_comments:
@@ -321,8 +318,7 @@ class PRReviewer:
                     event="COMMENT",
                     comments=review_comments
                 )
-                logger.info(f"Review created with {
-                            len(review_comments)} valid comments")
+                logger.info(f"Review created with {len(review_comments)} valid comments")
 
         except Exception as e:
             logger.error(f"Error posting comments: {e}")
@@ -333,14 +329,11 @@ class PRReviewer:
         try:
             logger.info("Starting PR review")
 
-            required_vars = ['FLOW_CLIENT_ID', 'FLOW_CLIENT_SECRET',
-                             'GITHUB_TOKEN', 'REPO_NAME', 'PR_NUMBER']
-            missing_vars = [
-                var for var in required_vars if not os.environ.get(var)]
+            required_vars = ['FLOW_CLIENT_ID', 'FLOW_CLIENT_SECRET', 'GITHUB_TOKEN', 'REPO_NAME', 'PR_NUMBER']
+            missing_vars = [var for var in required_vars if not os.environ.get(var)]
 
             if missing_vars:
-                raise ValueError(f"Missing environment variables: {
-                                 ', '.join(missing_vars)}")
+                raise ValueError(f"Missing environment variables: {', '.join(missing_vars)}")
 
             diff = self.get_pr_diff()
 
@@ -362,8 +355,7 @@ class PRReviewer:
 
             if all_comments:
                 self.post_review_comments(all_comments)
-                logger.info(f"Review completed with {
-                            len(all_comments)} comments")
+                logger.info(f"Review completed with {len(all_comments)} comments")
             else:
                 logger.info("No issues found in code")
 
@@ -371,11 +363,9 @@ class PRReviewer:
             logger.error(f"Error during review: {e}")
             sys.exit(1)
 
-
 def main():
     reviewer = PRReviewer()
     reviewer.run_review()
-
 
 if __name__ == "__main__":
     main()
