@@ -169,7 +169,7 @@ class PRReviewer:
             "client_id": self.flow_client_id,
             "client_secret": self.flow_client_secret
         }
-        response = requests.post(auth_url, data=data)
+        response = requests.post(auth_url, data=data, verify=False)
         if response.status_code == 200:
             return response.json()["access_token"]
         else:
@@ -193,7 +193,7 @@ class PRReviewer:
                 ]
             }
 
-            response = requests.post(self.flow_api_url, headers=headers, json=data)
+            response = requests.post(self.flow_api_url, headers=headers, json=data, verify=False)
             response.raise_for_status()
             response_json = response.json()
 
