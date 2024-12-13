@@ -1,6 +1,6 @@
 import os
 import sys
-import requests
+import httpx
 from github import Github
 from git import Repo
 import json
@@ -29,12 +29,16 @@ class PRReviewer:
     def __init__(self):
         self.flow_client_id = os.environ.get('FLOW_CLIENT_ID')
         self.flow_client_secret = os.environ.get('FLOW_CLIENT_SECRET')
-        self.flow_api_url = "https://api.flowai.com/v1/chat/completions"  # Ajuste esta URL conforme necessário
+        self.flow_api_url = "https://api.flowai.com/v1/chat/completions"
         self.github_client = Github(os.environ.get('GITHUB_TOKEN'))
         self.repo_name = os.environ.get('REPO_NAME')
         self.pr_number = int(os.environ.get('PR_NUMBER'))
         self.max_chunk_size = 15000
         self.diff_map = {}
+        self.http_client = httpx.Client(verify=False)
+
+    def __del__(self):
+        self.http_client.close()
 
     def get_pr_diff(self) -> str:
         """Get the current PR diff"""
@@ -163,17 +167,19 @@ class PRReviewer:
 
     def get_flow_access_token(self):
         """Obter token de acesso do Flow AI"""
-        auth_url = "https://api.flowai.com/v1/oauth/token"  # Ajuste esta URL conforme necessário
+        auth_url = "https://api.flowai.com/v1/oauth/token"
         data = {
             "grant_type": "client_credentials",
             "client_id": self.flow_client_id,
             "client_secret": self.flow_client_secret
         }
-        response = requests.post(auth_url, data=data, verify=False)
-        if response.status_code == 200:
+        try:
+            response = self.http_client.post(auth_url, data=data)
+            response.raise_for_status()
             return response.json()["access_token"]
-        else:
-            raise Exception("Failed to obtain Flow AI access token")
+        except httpx.HTTPError as e:
+            logger.error(f"Failed to obtain Flow AI access token: {e}")
+            raise
 
     def get_review_from_flow(self, diff_chunk: Dict[str, str], retry_count: int = 0) -> List[ReviewComment]:
         """Send chunk for review with retry and rate limiting"""
@@ -187,13 +193,13 @@ class PRReviewer:
                 "Content-Type": "application/json"
             }
             data = {
-                "model": "flow-gpt-4",  # Ajuste o modelo conforme necessário
+                "model": "flow-gpt-4",
                 "messages": [
                     {"role": "user", "content": self.create_review_prompt(diff_chunk)}
                 ]
             }
 
-            response = requests.post(self.flow_api_url, headers=headers, json=data, verify=False)
+            response = self.http_client.post(self.flow_api_url, headers=headers, json=data)
             response.raise_for_status()
             response_json = response.json()
 
@@ -233,7 +239,7 @@ class PRReviewer:
                     return self.get_review_from_flow(diff_chunk, retry_count + 1)
                 return []
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Error getting review: {e}")
             if retry_count < 2:
                 return self.get_review_from_flow(diff_chunk, retry_count + 1)
