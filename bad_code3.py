@@ -1,50 +1,20 @@
-def func(x, y):
-    a = 0
-    for i in range(x):
-        a += y
-        if a > 100:
-            break
-    if x > y:
-        return x - y
-    elif y > x:
-        return y - x
+# Código mal escrito
+def doStuff(x):
+    if x == 1:
+        print("One")
+    if x == 2:
+        print("Two")
+    elif x == 3:
+        print("Three")
+        return
     else:
-        return a
+        print("Other number")
+    print("Finished")
 
-result = func(50, 20)
-print("Resultado:", result)
+doStuff(2)
+doStuff(3)
+doStuff(5)
 
-def func(x, y):
-    a = 0
-    for i in range(x):
-        a += y
-        if a > 100:
-            break
-    if x > y:
-        return x - y
-    elif y > x:
-        return y - x
-    else:
-        return a
-
-result = func(50, 20)
-print("Resultado:", result)
-
-result = func(50, 20)
-print("Resultado:", result)
-
-def func(x, y):
-    a = 0
-    for i in range(x):
-        a += y
-        if a > 100:
-            break
-    if x > y:
-        return x - y
-    elif y > x:
-        return y - x
-    else:
-        return a
-
-result = func(50, 20)
-print("Resultado:", result)
+x = 10
+y = "string"
+print("Result is: " + str(x + 5))
